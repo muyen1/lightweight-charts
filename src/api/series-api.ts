@@ -188,7 +188,7 @@ export class SeriesApi<TSeriesType extends SeriesType> implements ISeriesApi<TSe
 
 	public createBox(options: BoxOptions): IBox {
 		checkBoxOptions(options);
-
+		console.log("series-api.ts test");
 		const strictOptions = merge(clone(boxOptionsDefaults), options) as BoxOptions;
 		const box = this._series.createBox(strictOptions);
 		return new Box(box);

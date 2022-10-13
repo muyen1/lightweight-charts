@@ -298,6 +298,7 @@ export class Series<T extends SeriesType = SeriesType> extends PriceDataSource i
 	}
 
 	public createBox(options: BoxOptions): CustomBox {
+		console.log("series-api.ts test2");
 		const result = new CustomBox(this, options);
 		this._customBoxes.push(result);
 		this.model().updateSource(this);
