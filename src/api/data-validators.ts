@@ -1,4 +1,5 @@
 import { assert } from '../helpers/assertions';
+import { BoxOptions } from '../model/box-options';
 
 import { CreatePriceLineOptions } from '../model/price-line-options';
 import { SeriesMarker } from '../model/series-markers';
