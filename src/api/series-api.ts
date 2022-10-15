@@ -7,7 +7,7 @@ import { BarPrice } from '../model/bar';
 import { BoxOptions } from '../model/box-options';
 import { Coordinate } from '../model/coordinate';
 import { MismatchDirection } from '../model/plot-list';
-import { PriceLineOptions } from '../model/price-line-options';
+import { CreatePriceLineOptions, PriceLineOptions } from '../model/price-line-options';
 import { RangeImpl } from '../model/range-impl';
 import { Series } from '../model/series';
 import { SeriesMarker } from '../model/series-markers';
@@ -174,7 +174,7 @@ export class SeriesApi<TSeriesType extends SeriesType> implements ISeriesApi<TSe
 		return this._priceScaleApiProvider.priceScale(this._series.priceScale().id());
 	}
 
-	public createPriceLine(options: PriceLineOptions): IPriceLine {
+	public createPriceLine(options: CreatePriceLineOptions): IPriceLine {
 		checkPriceLineOptions(options);
 
 		const strictOptions = merge(clone(priceLineOptionsDefaults), options) as PriceLineOptions;

@@ -69,8 +69,9 @@ export class ChartWidget implements IDestroyable {
 		this._element.appendChild(this._tableElement);
 
 		this._onWheelBound = this._onMousewheel.bind(this);
-		this._element.addEventListener('wheel', this._onWheelBound, { passive: false });
-
+		if (shouldSubscribeMouseWheel(this._options)) {
+			this._setMouseWheelEventListener(true);
+		}
 		this._model = new ChartModel(
 			this._invalidateHandler.bind(this),
 			this._options
@@ -129,7 +130,7 @@ export class ChartWidget implements IDestroyable {
 	}
 
 	public destroy(): void {
-		this._element.removeEventListener('wheel', this._onWheelBound);
+		this._setMouseWheelEventListener(false);
 		if (this._drawRafId !== 0) {
 			window.cancelAnimationFrame(this._drawRafId);
 		}
@@ -179,7 +180,7 @@ export class ChartWidget implements IDestroyable {
 		this._tableElement.style.width = widthStr;
 
 		if (forceRepaint) {
-			this._drawImpl(new InvalidateMask(InvalidationLevel.Full));
+			this._drawImpl(InvalidateMask.full(), performance.now());
 		} else {
 			this._model.fullUpdate();
 		}
@@ -187,7 +188,7 @@ export class ChartWidget implements IDestroyable {
 
 	public paint(invalidateMask?: InvalidateMask): void {
 		if (invalidateMask === undefined) {
-			invalidateMask = new InvalidateMask(InvalidationLevel.Full);
+			invalidateMask = InvalidateMask.full();
 		}
 
 		for (let i = 0; i < this._paneWidgets.length; i++) {
@@ -200,10 +201,18 @@ export class ChartWidget implements IDestroyable {
 	}
 
 	public applyOptions(options: DeepPartial<ChartOptionsInternal>): void {
+		const currentlyHasMouseWheelListener = shouldSubscribeMouseWheel(this._options);
+
 		// we don't need to merge options here because it's done in chart model
 		// and since both model and widget share the same object it will be done automatically for widget as well
 		// not ideal solution for sure, but it work's for now ¯\_(ツ)_/¯
 		this._model.applyOptions(options);
+
+		const shouldHaveMouseWheelListener = shouldSubscribeMouseWheel(this._options);
+		if (shouldHaveMouseWheelListener !== currentlyHasMouseWheelListener) {
+			this._setMouseWheelEventListener(shouldHaveMouseWheelListener);
+		}
+
 		this._updateTimeAxisVisibility();
 
 		const width = options.width || this._width;
@@ -222,7 +231,7 @@ export class ChartWidget implements IDestroyable {
 
 	public takeScreenshot(): HTMLCanvasElement {
 		if (this._invalidateMask !== null) {
-			this._drawImpl(this._invalidateMask);
+			this._drawImpl(this._invalidateMask, performance.now());
 			this._invalidateMask = null;
 		}
 		// calculate target size
@@ -406,6 +415,14 @@ export class ChartWidget implements IDestroyable {
 		}
 	}
 
+	private _setMouseWheelEventListener(add: boolean): void {
+		if (add) {
+			this._element.addEventListener('wheel', this._onWheelBound, { passive: false });
+			return;
+		}
+		this._element.removeEventListener('wheel', this._onWheelBound);
+	}
+
 	private _onMousewheel(event: WheelEvent): void {
 		let deltaX = event.deltaX / 100;
 		let deltaY = -(event.deltaY / 100);
@@ -444,7 +461,7 @@ export class ChartWidget implements IDestroyable {
 		}
 	}
 
-	private _drawImpl(invalidateMask: InvalidateMask): void {
+	private _drawImpl(invalidateMask: InvalidateMask, time: number): void {
 		const invalidationType = invalidateMask.fullInvalidation();
 
 		// actions for full invalidation ONLY (not shared with light)
@@ -458,7 +475,7 @@ export class ChartWidget implements IDestroyable {
 			invalidationType === InvalidationLevel.Light
 		) {
 			this._applyMomentaryAutoScale(invalidateMask);
-			this._applyTimeScaleInvalidations(invalidateMask);
+			this._applyTimeScaleInvalidations(invalidateMask, time);
 
 			this._timeAxisWidget.update();
 			this._paneWidgets.forEach((pane: PaneWidget) => {
@@ -475,7 +492,7 @@ export class ChartWidget implements IDestroyable {
 				this._updateGui();
 
 				this._applyMomentaryAutoScale(this._invalidateMask);
-				this._applyTimeScaleInvalidations(this._invalidateMask);
+				this._applyTimeScaleInvalidations(this._invalidateMask, time);
 
 				invalidateMask = this._invalidateMask;
 				this._invalidateMask = null;
@@ -485,10 +502,9 @@ export class ChartWidget implements IDestroyable {
 		this.paint(invalidateMask);
 	}
 
-	private _applyTimeScaleInvalidations(invalidateMask: InvalidateMask): void {
-		const timeScaleInvalidations = invalidateMask.timeScaleInvalidations();
-		for (const tsInvalidation of timeScaleInvalidations) {
-			this._applyTimeScaleInvalidation(tsInvalidation);
+	private _applyTimeScaleInvalidations(invalidateMask: InvalidateMask, time: number): void {
+		for (const tsInvalidation of invalidateMask.timeScaleInvalidations()) {
+			this._applyTimeScaleInvalidation(tsInvalidation, time);
 		}
 	}
 
@@ -501,7 +517,7 @@ export class ChartWidget implements IDestroyable {
 		}
 	}
 
-	private _applyTimeScaleInvalidation(invalidation: TimeScaleInvalidation): void {
+	private _applyTimeScaleInvalidation(invalidation: TimeScaleInvalidation, time: number): void {
 		const timeScale = this._model.timeScale();
 		switch (invalidation.type) {
 			case TimeScaleInvalidationType.FitContent:
@@ -519,6 +535,11 @@ export class ChartWidget implements IDestroyable {
 			case TimeScaleInvalidationType.Reset:
 				timeScale.restoreDefault();
 				break;
+			case TimeScaleInvalidationType.Animation:
+				if (!invalidation.value.finished(time)) {
+					timeScale.setRightOffset(invalidation.value.getPosition(time));
+				}
+				break;
 		}
 	}
 
@@ -531,14 +552,21 @@ export class ChartWidget implements IDestroyable {
 
 		if (!this._drawPlanned) {
 			this._drawPlanned = true;
-			this._drawRafId = window.requestAnimationFrame(() => {
+			this._drawRafId = window.requestAnimationFrame((time: number) => {
 				this._drawPlanned = false;
 				this._drawRafId = 0;
 
 				if (this._invalidateMask !== null) {
 					const mask = this._invalidateMask;
 					this._invalidateMask = null;
-					this._drawImpl(mask);
+					this._drawImpl(mask, time);
+
+					for (const tsInvalidation of mask.timeScaleInvalidations()) {
+						if (tsInvalidation.type === TimeScaleInvalidationType.Animation && !tsInvalidation.value.finished(time)) {
+							this.model().setTimeScaleAnimation(tsInvalidation.value);
+							break;
+						}
+					}
 				}
 			});
 		}
@@ -676,4 +704,8 @@ function disableSelection(element: HTMLElement): void {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access
 	(element.style as any).webkitTapHighlightColor = 'transparent';
+}
+
+function shouldSubscribeMouseWheel(options: ChartOptionsInternal): boolean {
+	return Boolean(options.handleScroll.mouseWheel || options.handleScale.mouseWheel);
 }
