@@ -45,6 +45,8 @@ export interface SeriesMarker<TimeType> {
 	 */
 	size?: number;
 
+	message?: string;
+
 	/**
 	 * @internal
 	 */
