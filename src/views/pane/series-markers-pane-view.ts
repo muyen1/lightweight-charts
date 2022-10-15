@@ -53,6 +53,7 @@ function fillSizeAndY(
 	rendererItem.size = shapeSize;
 
 	if (typeof marker.position === 'number') {
+		//test
 		rendererItem.y = priceScale.priceToCoordinate(marker.position, firstValue);
 		if (rendererItem.text !== undefined) {
 			rendererItem.text.y = rendererItem.y + halfSize + shapeMargin + textHeight * (0.5 + Constants.TextMargin) as Coordinate;
