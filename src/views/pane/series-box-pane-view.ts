@@ -17,7 +17,7 @@ export abstract class SeriesBoxPaneView implements IPaneView {
 		borderVisible: false,
 		xLow: 0 as Coordinate,
 		xHigh: 0 as Coordinate,
-		yLow: 0 as Coordinate,
+		yLow: 0 as Coordinate, 
 		yHigh: 0 as Coordinate,
 		visible: false,
 
